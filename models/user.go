@@ -218,7 +218,7 @@ func (c *Credentials) randomToken(size int) string {
 func (c *Credentials) CreateJWTToken(ID primitive.ObjectID,
 	email string, roles []string, key string) (string, *Token, error) {
 	t := new(Token)
-	t.TokenUUID = primitive.NewObjectID()
+	t.ID = primitive.NewObjectID()
 	t.Expires = time.Now().Add(time.Hour * 3)
 	expiry := t.Expires.Unix()
 	claims := &JwtClaims{
@@ -228,7 +228,7 @@ func (c *Credentials) CreateJWTToken(ID primitive.ObjectID,
 		Exp:        expiry,
 		Expires:    c.Expires,
 		MustChange: c.MustChange,
-		Uuid:       t.TokenUUID,
+		Uuid:       t.ID,
 		Locked:     c.Locked,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expiry,
