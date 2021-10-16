@@ -1,4 +1,4 @@
-module soap
+module go-soap
 
 go 1.17
 
