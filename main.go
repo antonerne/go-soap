@@ -126,7 +126,6 @@ func main() {
 				for _, day := range month.StudyDays {
 					for k, ref := range day.References {
 						book := bookMap[ref.BookID]
-						fmt.Println(book.Title)
 						ref.AssignBook(book)
 						day.References[k] = ref
 					}
