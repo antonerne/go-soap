@@ -1,4 +1,4 @@
-module go-soap
+module github.com/antonerne/go-soap
 
 go 1.17
 
