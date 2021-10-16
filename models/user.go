@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"math/rand"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ type User struct {
 	Email string             `json:"email" bson:"email"`
 	Name  Name               `json:"name" bson:"name"`
 	Creds Credentials        `json:"creds,omitempty" bson:"creds"`
+	Roles []string           `json:"roles,omitempty" bson:"roles"`
 }
 
 type Name struct {
@@ -38,6 +40,7 @@ type Credentials struct {
 	VerificationToken string    `json:"-" bson:"verificationtoken,omitempty"`
 	ResetToken        string    `json:"-" bson:"resettoken,omitempty"`
 	ResetExpires      time.Time `json:"-" bson:"resetexpires,omitempty"`
+	NewRemoteToken    string    `json:"-" bson:"newremotetoken,omitempty"`
 	Remotes           []string  `json:"-" bson:"lastremote,omitempty"`
 	PrivateKey        string    `json:"-" bson:"privatekey,omitempty"`
 }
@@ -146,6 +149,25 @@ func (c *Credentials) Verify(token string) (bool, *ErrorMessage) {
 	}
 }
 
+// New Remote start will create a token for allowing the user to approve a new
+// computer or other device to be used.
+func (c *Credentials) StartRemoteToken() string {
+	c.NewRemoteToken = c.randomToken(7)
+	return c.NewRemoteToken
+}
+
+func (c *Credentials) VerifyRemoteToken(token string, ipaddr string) (bool, *ErrorMessage) {
+	if c.NewRemoteToken == token {
+		c.Remotes = append(c.Remotes, ipaddr)
+		return true, nil
+	}
+	return false, &ErrorMessage{
+		ErrorType:  "new remote",
+		StatusCode: http.StatusUnauthorized,
+		Message:    "authorization failure",
+	}
+}
+
 // StartForgot function will be used to start the reset (forgot) password
 // process, creating a token and an expiration date/time.
 func (c *Credentials) StartForgot() string {
@@ -193,7 +215,7 @@ func (c *Credentials) randomToken(size int) string {
 	return token
 }
 
-func (c *Credentials) CreateJWTToken(ID primitive.ObjectID, string,
+func (c *Credentials) CreateJWTToken(ID primitive.ObjectID,
 	email string, roles []string, key string) (string, *Token, error) {
 	t := new(Token)
 	t.TokenUUID = primitive.NewObjectID()
@@ -230,7 +252,7 @@ func (c *Credentials) CreateJWTToken(ID primitive.ObjectID, string,
 func (c *Credentials) ValidateToken(encodedToken string) (*jwt.Token, error) {
 	return jwt.Parse(encodedToken, func(token *jwt.Token) (interface{}, error) {
 		if _, isvalid := token.Method.(*jwt.SigningMethodHMAC); !isvalid {
-			return nil, fmt.Errorf("Invalid token - %s", token.Header["alg"])
+			return nil, fmt.Errorf("invalid token - %s", token.Header["alg"])
 		}
 		secretKey := os.Getenv("JWT_SECRET")
 		if secretKey == "" {

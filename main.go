@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go-soap/models"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/antonerne/go-soap/models"
 
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson/primitive"
