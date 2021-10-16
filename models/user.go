@@ -18,7 +18,7 @@ type User struct {
 	ID    primitive.ObjectID `json:"id" bson:"_id"`
 	Email string             `json:"email" bson:"email"`
 	Name  Name               `json:"name" bson:"name"`
-	Creds Credentials        `json:"creds" bson:"creds"`
+	Creds Credentials        `json:"creds,omitempty" bson:"creds"`
 }
 
 type Name struct {

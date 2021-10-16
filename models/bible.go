@@ -22,7 +22,13 @@ type BibleStudyDayReference struct {
 	Code      string `json:"code,omitempty" bson:"code,omitempty"`
 	Title     string `json:"title,omitempty" bson:"title,omitempty"`
 	Chapter   uint   `json:"chapter" bson:"chapter"`
+	Verses    string `json:"verses,omitempty" bson:"verses,omitempty"`
 	Completed bool   `json:"completed,omitempty" bson:"completed"`
+}
+
+func (bsr *BibleStudyDayReference) AssignBook(book BibleBook) {
+	bsr.Code = book.Code
+	bsr.Title = book.Title
 }
 
 // ByBibleBooks will containt the list of books and allow for sorting
@@ -74,7 +80,7 @@ func (s ByBibleStudyPeriod) Less(i, j int) bool { return s[i].Period < s[j].Peri
 type BibleStudy struct {
 	ID      primitive.ObjectID `json:"id" bson:"_id"`
 	Title   string             `json:"title" bson:"title"`
-	Days    uint8              `json:"days" bson:"days"`
+	Days    uint               `json:"days" bson:"days"`
 	Periods []BibleStudyPeriod `json:"periods" bson:"periods"`
 }
 

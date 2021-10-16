@@ -18,7 +18,12 @@ import (
 )
 
 type Users struct {
-	Users []models.User `json:"users"`
+	Users []models.User      `json:"users"`
+	Books []models.BibleBook `json:"biblebooks"`
+}
+
+type Study struct {
+	Studies []models.BibleStudy `json:"studies"`
 }
 
 func main() {
@@ -45,6 +50,20 @@ func main() {
 
 	database := client.Database("soap")
 	if loadData {
+
+		err := database.Collection("users").Drop(ctx)
+		if err != nil {
+			log.Println(err)
+		}
+		err = database.Collection("biblebooks").Drop(ctx)
+		if err != nil {
+			log.Println(err)
+		}
+		err = database.Collection("biblestudies").Drop(ctx)
+		if err != nil {
+			log.Println(err)
+		}
+
 		jsonfile, err := os.Open("initialUsers.json")
 		if err != nil {
 			log.Fatal(err)
@@ -55,18 +74,68 @@ func main() {
 
 		var users Users
 
-		json.Unmarshal(byteValue, &users)
+		err = json.Unmarshal(byteValue, &users)
+		if err != nil {
+			log.Fatalln(err)
+		}
 
 		userCollection := database.Collection("users")
+		booksCollection := database.Collection("biblebooks")
+		studyCollection := database.Collection("biblestudies")
+
+		bookMap := make(map[uint]models.BibleBook)
 
 		for _, user := range users.Users {
 			user.ID = primitive.NewObjectID()
 			user.Creds.SetPassword("InitialPassword")
-			insertResult, err := userCollection.InsertOne(ctx, user)
+			user.Creds.MustChange = true
+			user.Creds.Locked = false
+			_, err := userCollection.InsertOne(ctx, user)
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Println(insertResult.InsertedID)
+		}
+
+		fmt.Println(len(users.Books))
+		for _, book := range users.Books {
+			bookMap[book.ID] = book
+			_, err := booksCollection.InsertOne(ctx, book)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		jsonfile, err = os.Open("soapStudy.json")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer jsonfile.Close()
+
+		byteValue, _ = ioutil.ReadAll(jsonfile)
+
+		var study Study
+
+		err = json.Unmarshal(byteValue, &study)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		for _, st := range study.Studies {
+			st.ID = primitive.NewObjectID()
+			for _, month := range st.Periods {
+				for _, day := range month.StudyDays {
+					for k, ref := range day.References {
+						book := bookMap[ref.BookID]
+						fmt.Println(book.Title)
+						ref.AssignBook(book)
+						day.References[k] = ref
+					}
+				}
+			}
+			_, err := studyCollection.InsertOne(ctx, st)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 }
