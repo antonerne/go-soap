@@ -146,6 +146,7 @@ func (c *Credentials) StartVerification() string {
 // Verify function will be used to complete the Email Verification process, by
 // removing the verification token and setting the verification datetime.
 func (c *Credentials) Verify(token string) (bool, *ErrorMessage) {
+	fmt.Printf("DB Token: %s - Passed Token: %s\n", c.VerificationToken, token)
 	if c.VerificationToken == token {
 		c.Verified = time.Now()
 		c.VerificationToken = ""
