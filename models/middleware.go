@@ -32,7 +32,7 @@ func AuthorizeJWT(db *mongo.Database, log *LogFile) gin.HandlerFunc {
 				if dbToken.Expires.Before(time.Now()) {
 					c.AbortWithStatus(http.StatusUnauthorized)
 				}
-				c.Writer.Header().Set("userid", claims.Id.Hex())
+				c.Writer.Header().Set("userid", claims.Id)
 				roles := ""
 				for _, r := range claims.Roles {
 					if roles != "" {
@@ -67,7 +67,8 @@ func AuthorizeRole(roles []string, db *mongo.Database, log *LogFile) gin.Handler
 			if token.Valid {
 				claims := creds.GetClaims(token.Claims.(jwt.MapClaims))
 				var dbToken Token
-				filter := bson.D{primitive.E{Key: "_id", Value: claims.Uuid}}
+				uuid, _ := primitive.ObjectIDFromHex(claims.Uuid)
+				filter := bson.D{primitive.E{Key: "_id", Value: uuid}}
 				tokens.FindOne(ctx, filter).Decode(&dbToken)
 				if dbToken.Expires.Before(time.Now()) {
 					c.AbortWithStatus(http.StatusUnauthorized)
@@ -98,7 +99,7 @@ func AuthorizeRole(roles []string, db *mongo.Database, log *LogFile) gin.Handler
 					})
 					return
 				}
-				c.Writer.Header().Set("userid", claims.Id.Hex())
+				c.Writer.Header().Set("userid", claims.Id)
 				c.Next()
 				return
 			}

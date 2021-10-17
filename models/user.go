@@ -222,13 +222,13 @@ func (c *Credentials) CreateJWTToken(ID primitive.ObjectID,
 	t.Expires = time.Now().Add(time.Hour * 3)
 	expiry := t.Expires.Unix()
 	claims := &JwtClaims{
-		Id:         ID,
+		Id:         ID.Hex(),
 		Email:      email,
 		Roles:      roles,
 		Exp:        expiry,
 		Expires:    c.Expires,
 		MustChange: c.MustChange,
-		Uuid:       t.ID,
+		Uuid:       t.ID.Hex(),
 		Locked:     c.Locked,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expiry,
@@ -271,7 +271,7 @@ func (c *Credentials) GetClaims(iClaims map[string]interface{}) *JwtClaims {
 	for k, v := range iClaims {
 		switch strings.ToLower(k) {
 		case "id":
-			claims.Id = v.(primitive.ObjectID)
+			claims.Id = v.(string)
 		case "email":
 			claims.Email = v.(string)
 		case "roles":
@@ -284,7 +284,7 @@ func (c *Credentials) GetClaims(iClaims map[string]interface{}) *JwtClaims {
 		case "mustchange":
 			claims.MustChange = v.(bool)
 		case "uuid":
-			claims.Uuid = v.(primitive.ObjectID)
+			claims.Uuid = v.(string)
 		case "locked":
 			claims.Locked = v.(bool)
 		}
