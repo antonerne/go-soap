@@ -30,6 +30,15 @@ type Name struct {
 	Suffix string `json:"suffix,omitempty" bson:"suffix,omitempty"`
 }
 
+func (n *Name) FullName() string {
+	answer := n.First
+	if n.Middle != "" {
+		answer += fmt.Sprintf(" %s", n.Middle)
+	}
+	answer += fmt.Sprintf(" %s", n.Last)
+	return answer
+}
+
 type Credentials struct {
 	Password          string    `json:"-" bson:"password"`
 	Expires           time.Time `json:"expires" bson:"expires"`
