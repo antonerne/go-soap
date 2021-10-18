@@ -6,23 +6,28 @@ import (
 	rd "crypto/rand"
 	"errors"
 	"io"
-	rand "math/rand"
+	"math/big"
 	"strconv"
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"github.com/google/uuid"
 )
 
 type EntryReference struct {
-	Book      string `json:"book" bson:"book"`
-	Chapter   uint8  `json:"chapter" bson:"chapter"`
-	VerseList string `json:"verses" bson:"verses"`
+	ID        uint64 `json:"id" gorm:"primaryKey;column:id;autoIncrement"`
+	EntryID   string `json:"-" gorm:"column:entry_id"`
+	Book      string `json:"book" gorm:"column:book"`
+	Chapter   uint8  `json:"chapter" gorm:"column:chapter"`
+	VerseList string `json:"verses" gorm:"column:verses"`
 }
 
 type EntryText struct {
-	Encrypted bool   `json:"encrypted" bson:"encrypted"`
-	EntryText string `json:"entrytext" bson:"entrytext"`
+	ID        uint64 `json:"id" gorm:"primaryKey;column:id;autoIncrement"`
+	EntryID   string `json:"-" gorm:"column:entry_id"`
+	TextType  string `json:"texttype" gorm:"column:text_type"`
+	Encrypted bool   `json:"encrypted" gorm:"column:encrypted"`
+	EntryText string `json:"entrytext" gorm:"column:entrytext"`
 }
 
 func (et *EntryText) EncryptText(privkey string, entrykey string) error {
@@ -123,16 +128,13 @@ func (et *EntryText) DecryptText(privkey string, entrykey string) error {
 }
 
 type Entry struct {
-	ID           primitive.ObjectID `json:"id" bson:"_id"`
-	UserID       primitive.ObjectID `json:"user" bson:"userid"`
-	Key          string             `json:"-" bson:"privacy"`
-	EntryDate    time.Time          `json:"entrydate" bson:"entrydate"`
-	Title        string             `json:"title" bson:"title"`
-	Reference    EntryReference     `json:"reference" bson:"reference"`
-	Scripture    EntryText          `json:"scripture" bson:"scripture"`
-	Observations EntryText          `json:"observations" bson:"observations"`
-	Application  EntryText          `json:"application" bson:"application"`
-	Prayer       EntryText          `json:"prayer" bson:"prayer"`
+	ID        string           `json:"id" gorm:"primaryKey;column:id"`
+	UserID    string           `json:"user" gorm:"column:user_id"`
+	Key       string           `json:"-" gorm:"column:privacy"`
+	EntryDate time.Time        `json:"entrydate" bson:"entrydate"`
+	Title     string           `json:"title" bson:"title"`
+	Reference []EntryReference `json:"reference" bson:"reference"`
+	Texts     []EntryText      `json:"texts" bson:"scripture"`
 }
 
 func (e *Entry) CreateEntryKey(userkey string) error {
@@ -160,15 +162,16 @@ func (e *Entry) CreateRandomKey() string {
 	lower := "abcdefghijklmnopqrstuvwxyz"
 	randPasswd := ""
 	for len([]byte(randPasswd)) < 32 {
-		j := rand.Intn(3)
-		if j == 0 {
-			lPos := rand.Intn(26)
-			randPasswd += lower[lPos : lPos+1]
-		} else if j == 1 {
-			uPos := rand.Intn(26)
-			randPasswd += strings.ToUpper(lower[uPos : uPos+1])
+		j, _ := rd.Int(rd.Reader, big.NewInt(3))
+		if j.Int64() == 0 {
+			lPos, _ := rd.Int(rd.Reader, big.NewInt(26))
+			randPasswd += lower[lPos.Int64() : lPos.Int64()+1]
+		} else if j.Int64() == 1 {
+			uPos, _ := rd.Int(rd.Reader, big.NewInt(26))
+			randPasswd += strings.ToUpper(lower[uPos.Int64() : uPos.Int64()+1])
 		} else {
-			randPasswd += strconv.FormatInt(rand.Int63n(9), 10)
+			num, _ := rd.Int(rd.Reader, big.NewInt(10))
+			randPasswd += strconv.FormatInt(num.Int64(), 10)
 		}
 	}
 	return randPasswd
@@ -176,23 +179,24 @@ func (e *Entry) CreateRandomKey() string {
 
 func (e *Entry) SetEntryText(field string, text string, userkey string) error {
 	var err error
-	switch strings.ToLower(field)[:1] {
-	case "s":
-		e.Scripture.Encrypted = false
-		e.Scripture.EntryText = text
-		err = e.Scripture.EncryptText(userkey, e.Key)
-	case "o":
-		e.Observations.Encrypted = false
-		e.Observations.EntryText = text
-		err = e.Observations.EncryptText(userkey, e.Key)
-	case "a":
-		e.Application.Encrypted = false
-		e.Application.EntryText = text
-		err = e.Application.EncryptText(userkey, e.Key)
-	case "p":
-		e.Prayer.Encrypted = false
-		e.Prayer.EntryText = text
-		e.Prayer.EncryptText(userkey, e.Key)
+	found := false
+	for i, txt := range e.Texts {
+		if !found && strings.EqualFold(txt.TextType, field) {
+			found = true
+			txt.Encrypted = false
+			txt.EntryText = text
+			err = txt.EncryptText(userkey, e.Key)
+			e.Texts[i] = txt
+		}
+	}
+	if !found {
+		txt := EntryText{}
+		txt.Encrypted = false
+		txt.EntryText = text
+		txt.TextType = field
+		txt.EntryID = e.ID
+		err = txt.EncryptText(userkey, e.Key)
+		e.Texts = append(e.Texts, txt)
 	}
 	if err != nil {
 		return err
@@ -200,9 +204,9 @@ func (e *Entry) SetEntryText(field string, text string, userkey string) error {
 	return nil
 }
 
-func NewEntry(user primitive.ObjectID, userKey string, entryDate time.Time) (*Entry, error) {
+func NewEntry(user string, userKey string, entryDate time.Time) (*Entry, error) {
 	answer := Entry{
-		ID:        primitive.NewObjectID(),
+		ID:        uuid.NewString(),
 		UserID:    user,
 		EntryDate: entryDate,
 	}

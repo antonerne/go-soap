@@ -20,7 +20,7 @@ func (em *ErrorMessage) String() string {
 type JwtClaims struct {
 	Id         string    `json:"id"`
 	Email      string    `json:"email"`
-	Roles      []string  `json:"roles"`
+	Editor     bool      `json:"editor"`
 	Exp        int64     `json:"exp"`
 	Expires    time.Time `json:"expires"`
 	MustChange bool      `json:"mustchange"`

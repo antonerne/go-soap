@@ -1,7 +1,9 @@
 package models
 
 import (
+	rd "crypto/rand"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"net/http"
 	"os"
@@ -10,24 +12,66 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
-	ID    primitive.ObjectID `json:"id" bson:"_id"`
-	Email string             `json:"email" bson:"email"`
-	Name  Name               `json:"name" bson:"name"`
-	Creds Credentials        `json:"creds,omitempty" bson:"creds"`
-	Roles []string           `json:"roles,omitempty" bson:"roles"`
+	ID      string           `json:"id" gorm:"primaryKey;column:id"`
+	Email   string           `json:"email" gorm:"column:email"`
+	Editor  bool             `json:"editor,omitempty" gorm:"column:editor"`
+	Name    Name             `json:"name" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Creds   Credentials      `json:"creds,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Remotes []UserRemote     `json:"remotes" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	Studies []UserBibleStudy `json:"studies" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+}
+
+func (User) TableName() string {
+	return "users"
+}
+
+func (u *User) HasRemote(ipaddress string) bool {
+	answer := false
+	for _, rip := range u.Remotes {
+		if rip.RemoteIP == ipaddress {
+			answer = true
+		}
+	}
+	return answer
+}
+
+func (u *User) VerifyRemoteToken(token string, ipaddr string) (bool, *ErrorMessage) {
+	if u.Creds.NewRemoteToken == token {
+		return true, nil
+	}
+	return false, &ErrorMessage{
+		ErrorType:  "new remote",
+		StatusCode: http.StatusUnauthorized,
+		Message:    "authorization failure",
+	}
+}
+
+type UserRemote struct {
+	ID       uint64 `json:"id" gorm:"primaryKey;column:id;autoIncrement"`
+	UserID   string `json:"-" gorm:"column:userid"`
+	RemoteIP string `json:"remote_ip" gorm:"column:remote_ip"`
+}
+
+func (UserRemote) TableName() string {
+	return "user_remotes"
 }
 
 type Name struct {
-	First  string `json:"first" bson:"first"`
-	Middle string `json:"middle,omitempty" bson:"middle,omitempty"`
-	Last   string `json:"last" bson:"last"`
-	Suffix string `json:"suffix,omitempty" bson:"suffix,omitempty"`
+	UserID string `json:"-" gorm:"primaryKey;column:userid"`
+	First  string `json:"first" gorm:"column:first"`
+	Middle string `json:"middle,omitempty" gorm:"column:middle"`
+	Last   string `json:"last" gorm:"column:last"`
+	Suffix string `json:"suffix,omitempty" gorm:"column:suffix"`
+}
+
+func (Name) TableName() string {
+	return "user_names"
 }
 
 func (n *Name) FullName() string {
@@ -40,18 +84,22 @@ func (n *Name) FullName() string {
 }
 
 type Credentials struct {
-	Password          string    `json:"-" bson:"password"`
-	Expires           time.Time `json:"expires" bson:"expires"`
-	MustChange        bool      `json:"mustchange" bson:"mustchange"`
-	Locked            bool      `json:"locked" bson:"locked"`
-	BadAttempts       int16     `json:"-" bson:"badattempts"`
-	Verified          time.Time `json:"-" bson:"verified,omitempty"`
-	VerificationToken string    `json:"-" bson:"verificationtoken,omitempty"`
-	ResetToken        string    `json:"-" bson:"resettoken,omitempty"`
-	ResetExpires      time.Time `json:"-" bson:"resetexpires,omitempty"`
-	NewRemoteToken    string    `json:"-" bson:"newremotetoken,omitempty"`
-	Remotes           []string  `json:"-" bson:"lastremote,omitempty"`
-	PrivateKey        string    `json:"-" bson:"privatekey,omitempty"`
+	UserID            string    `json:"-" gorm:"primaryKey;column:userid"`
+	Password          string    `json:"-" gorm:"column:password"`
+	Expires           time.Time `json:"expires" gorm:"column:expires"`
+	MustChange        bool      `json:"mustchange" gorm:"column:mustchange"`
+	Locked            bool      `json:"locked" gorm:"column:locked"`
+	BadAttempts       int16     `json:"-" gorm:"column:badattempts"`
+	Verified          time.Time `json:"-" gorm:"column:verified"`
+	VerificationToken string    `json:"-" gorm:"column:verificationtoken"`
+	ResetToken        string    `json:"-" gorm:"column:resettoken"`
+	ResetExpires      time.Time `json:"-" gorm:"column:resetexpires"`
+	NewRemoteToken    string    `json:"-" gorm:"column:newremotetoken"`
+	PrivateKey        string    `json:"-" gorm:"column:privatekey"`
+}
+
+func (Credentials) TableName() string {
+	return "user_credentials"
 }
 
 // SetPassword function will reset the password to a new value, storing the
@@ -121,12 +169,6 @@ func (c *Credentials) LogIn(passwd string, remote string) (bool, *ErrorMessage) 
 	}
 	c.BadAttempts = 0
 	c.Locked = false
-	// check if remote access is from a terminal already loaded.
-	for _, site := range c.Remotes {
-		if strings.EqualFold(site, remote) {
-			return true, nil
-		}
-	}
 	errMsg := ErrorMessage{
 		ErrorType:  "new remote",
 		StatusCode: 205,
@@ -166,18 +208,6 @@ func (c *Credentials) StartRemoteToken() string {
 	return c.NewRemoteToken
 }
 
-func (c *Credentials) VerifyRemoteToken(token string, ipaddr string) (bool, *ErrorMessage) {
-	if c.NewRemoteToken == token {
-		c.Remotes = append(c.Remotes, ipaddr)
-		return true, nil
-	}
-	return false, &ErrorMessage{
-		ErrorType:  "new remote",
-		StatusCode: http.StatusUnauthorized,
-		Message:    "authorization failure",
-	}
-}
-
 // StartForgot function will be used to start the reset (forgot) password
 // process, creating a token and an expiration date/time.
 func (c *Credentials) StartForgot() string {
@@ -193,15 +223,16 @@ func (c *Credentials) CreateRandomKey(length uint) string {
 	lower := "abcdefghijklmnopqrstuvwxyz"
 	randPasswd := ""
 	for len([]byte(randPasswd)) < 32 {
-		j := rand.Intn(3)
-		if j == 0 {
-			lPos := rand.Intn(26)
-			randPasswd += lower[lPos : lPos+1]
-		} else if j == 1 {
-			uPos := rand.Intn(26)
-			randPasswd += strings.ToUpper(lower[uPos : uPos+1])
+		j, _ := rd.Int(rd.Reader, big.NewInt(3))
+		if j.Int64() == 0 {
+			lPos, _ := rd.Int(rd.Reader, big.NewInt(26))
+			randPasswd += lower[lPos.Int64() : lPos.Int64()+1]
+		} else if j.Int64() == 1 {
+			uPos, _ := rd.Int(rd.Reader, big.NewInt(26))
+			randPasswd += strings.ToUpper(lower[uPos.Int64() : uPos.Int64()+1])
 		} else {
-			randPasswd += strconv.FormatInt(rand.Int63n(9), 10)
+			num, _ := rd.Int(rd.Reader, big.NewInt(10))
+			randPasswd += strconv.FormatInt(num.Int64(), 10)
 		}
 	}
 	return randPasswd
@@ -219,26 +250,26 @@ func (c *Credentials) randomToken(size int) string {
 	characters := "0123456789"
 	token := ""
 	for i := 0; i < size; i++ {
-		randCh := rand.Intn(len(characters))
-		token += characters[randCh : randCh+1]
+		pos, _ := rd.Int(rd.Reader, big.NewInt(int64(len(characters))))
+		token += characters[pos.Int64() : pos.Int64()+1]
 	}
 	return token
 }
 
-func (c *Credentials) CreateJWTToken(ID primitive.ObjectID,
-	email string, roles []string, key string) (string, *Token, error) {
+func (c *Credentials) CreateJWTToken(ID string, email string, editor bool,
+	key string) (string, *Token, error) {
 	t := new(Token)
-	t.ID = primitive.NewObjectID()
+	t.ID = uuid.NewString()
 	t.Expires = time.Now().Add(time.Hour * 3)
 	expiry := t.Expires.Unix()
 	claims := &JwtClaims{
-		Id:         ID.Hex(),
+		Id:         ID,
 		Email:      email,
-		Roles:      roles,
+		Editor:     editor,
 		Exp:        expiry,
 		Expires:    c.Expires,
 		MustChange: c.MustChange,
-		Uuid:       t.ID.Hex(),
+		Uuid:       t.ID,
 		Locked:     c.Locked,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expiry,
@@ -284,11 +315,8 @@ func (c *Credentials) GetClaims(iClaims map[string]interface{}) *JwtClaims {
 			claims.Id = v.(string)
 		case "email":
 			claims.Email = v.(string)
-		case "roles":
-			roles := v.([]interface{})
-			for i := range roles {
-				claims.Roles = append(claims.Roles, roles[i].(string))
-			}
+		case "editor":
+			claims.Editor = v.(bool)
 		case "expires":
 			claims.Expires, _ = time.Parse(time.RFC3339, v.(string))
 		case "mustchange":

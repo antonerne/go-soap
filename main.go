@@ -1,21 +1,19 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/antonerne/go-soap/models"
+	"github.com/google/uuid"
 
 	"github.com/joho/godotenv"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type Users struct {
@@ -40,30 +38,41 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	url := fmt.Sprintf("mongodb://%s/", os.Getenv("mongodb"))
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(url))
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s",
+		os.Getenv("DBHOST"), os.Getenv("DBUSER"), os.Getenv("DBPASSWD"),
+		os.Getenv("DATABASE"), os.Getenv("DBPORT"))
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer client.Disconnect(ctx)
 
-	database := client.Database("soap")
+	db.AutoMigrate(
+		&models.BibleBook{},
+		&models.BibleStudy{},
+		&models.BibleStudyPeriod{},
+		&models.BibleStudyDay{},
+		&models.BibleStudyDayReference{},
+	)
+
+	db.AutoMigrate(
+		&models.User{},
+		&models.UserRemote{},
+		&models.Name{},
+		&models.Credentials{},
+	)
+
+	db.AutoMigrate(
+		&models.UserBibleStudy{},
+		&models.UserBibleStudyPeriod{},
+		&models.UserBibleStudyDay{},
+		&models.UserBibleStudyReference{},
+	)
+
 	if loadData {
 
-		err := database.Collection("users").Drop(ctx)
-		if err != nil {
-			log.Println(err)
-		}
-		err = database.Collection("biblebooks").Drop(ctx)
-		if err != nil {
-			log.Println(err)
-		}
-		err = database.Collection("biblestudies").Drop(ctx)
-		if err != nil {
-			log.Println(err)
-		}
+		db.Exec("DELETE FROM users")
+		db.Exec("DELETE FROM biblebooks")
+		db.Exec("DELETE FROM biblestudies")
 
 		jsonfile, err := os.Open("initialUsers.json")
 		if err != nil {
@@ -80,30 +89,21 @@ func main() {
 			log.Fatalln(err)
 		}
 
-		userCollection := database.Collection("users")
-		booksCollection := database.Collection("biblebooks")
-		studyCollection := database.Collection("biblestudies")
-
 		bookMap := make(map[uint]models.BibleBook)
 
 		for _, user := range users.Users {
-			user.ID = primitive.NewObjectID()
+			user.ID = uuid.NewString()
+			user.Name.UserID = user.ID
+			user.Creds.UserID = user.ID
 			user.Creds.SetPassword("InitialPassword")
 			user.Creds.MustChange = true
 			user.Creds.Locked = false
-			_, err := userCollection.InsertOne(ctx, user)
-			if err != nil {
-				log.Fatal(err)
-			}
+			db.Create(&user)
 		}
 
-		fmt.Println(len(users.Books))
 		for _, book := range users.Books {
+			db.Create(&book)
 			bookMap[book.ID] = book
-			_, err := booksCollection.InsertOne(ctx, book)
-			if err != nil {
-				log.Fatal(err)
-			}
 		}
 
 		jsonfile, err = os.Open("soapStudy.json")
@@ -122,20 +122,7 @@ func main() {
 		}
 
 		for _, st := range study.Studies {
-			st.ID = primitive.NewObjectID()
-			for _, month := range st.Periods {
-				for _, day := range month.StudyDays {
-					for k, ref := range day.References {
-						book := bookMap[ref.BookID]
-						ref.AssignBook(book)
-						day.References[k] = ref
-					}
-				}
-			}
-			_, err := studyCollection.InsertOne(ctx, st)
-			if err != nil {
-				log.Fatal(err)
-			}
+			db.Create(&st)
 		}
 	}
 }

@@ -1,13 +1,15 @@
 package models
 
-import "go.mongodb.org/mongo-driver/bson/primitive"
-
 type BibleBook struct {
-	ID        uint   `json:"id" bson:"_id"`
-	Code      string `json:"code" bson:"code"`
-	Title     string `json:"title" bson:"title"`
-	Chapters  uint   `json:"chapters" bson:"chapters"`
-	Apocrapha bool   `json:"apocrapha,omitempty" bson:"apocrapha,omitempty"`
+	ID        uint   `json:"id" gorm:"primaryKey;column:id"`
+	Code      string `json:"code" gorm:"column:code"`
+	Title     string `json:"title" gorm:"column:title"`
+	Chapters  uint   `json:"chapters" gorm:"column:chapters"`
+	Apocrapha bool   `json:"apocrapha,omitempty" gorm:"column:apocrapha"`
+}
+
+func (BibleBook) TableName() string {
+	return "bible_books"
 }
 
 // ByBibleBooks will containt the list of books and allow for sorting
@@ -18,17 +20,16 @@ func (s ByBibleBooks) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s ByBibleBooks) Less(i, j int) bool { return s[i].ID < s[j].ID }
 
 type BibleStudyDayReference struct {
-	BookID    uint   `json:"bookid" bson:"bookid"`
-	Code      string `json:"code,omitempty" bson:"code,omitempty"`
-	Title     string `json:"title,omitempty" bson:"title,omitempty"`
-	Chapter   uint   `json:"chapter" bson:"chapter"`
-	Verses    string `json:"verses,omitempty" bson:"verses,omitempty"`
-	Completed bool   `json:"completed,omitempty" bson:"completed"`
+	ID              uint64 `json:"id" gorm:"primaryKey;column:id;autoIncrement"`
+	BibleStudyDayID uint64 `json:"-" gorm:"column:bible_study_day_id"`
+	BookID          uint   `json:"_" gorm:"column:book_id"`
+	Chapter         uint   `json:"chapter" gorm:"column:chapter"`
+	Verses          string `json:"verses,omitempty" gorm:"column:verses"`
+	Completed       bool   `json:"completed,omitempty" gorm:"-"`
 }
 
-func (bsr *BibleStudyDayReference) AssignBook(book BibleBook) {
-	bsr.Code = book.Code
-	bsr.Title = book.Title
+func (BibleStudyDayReference) TableName() string {
+	return "bible_study_day_reference"
 }
 
 // ByBibleBooks will containt the list of books and allow for sorting
@@ -44,8 +45,14 @@ func (s ByBibleStudyDayReference) Less(i, j int) bool {
 }
 
 type BibleStudyDay struct {
-	Day        uint                     `json:"day" bson:"day"`
-	References []BibleStudyDayReference `json:"references" bson:"references"`
+	ID                 uint64                   `json:"id" gorm:"primaryKey;column:id;autoIncrement"`
+	BibleStudyPeriodID uint64                   `json:"-" gorm:"column:bible_study_period_id"`
+	Day                uint                     `json:"day" gorm:"column:day"`
+	References         []BibleStudyDayReference `json:"references" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+}
+
+func (BibleStudyDay) TableName() string {
+	return "bible_study_period_days"
 }
 
 // ByBibleStudyDay will contain the list of study days during a period
@@ -65,9 +72,15 @@ func (d *BibleStudyDay) IsComplete() bool {
 }
 
 type BibleStudyPeriod struct {
-	Period    uint            `json:"period" bson:"period"`
-	Title     string          `json:"title" bson:"title"`
-	StudyDays []BibleStudyDay `json:"studydays" bson:"studydays"`
+	ID           uint64          `json:"id" gorm:"primaryKey;column:id;autoIncrement"`
+	BibleStudyID uint64          `json:"-" gorm:"column:bible_study_id"`
+	Period       uint            `json:"period" gorm:"column:period"`
+	Title        string          `json:"title" gorm:"column:title"`
+	StudyDays    []BibleStudyDay `json:"studydays" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+}
+
+func (BibleStudyPeriod) TableName() string {
+	return "bible_study_periods"
 }
 
 // ByBibleStudyPeriod will contain the list of study periods defining the study
@@ -78,10 +91,14 @@ func (s ByBibleStudyPeriod) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s ByBibleStudyPeriod) Less(i, j int) bool { return s[i].Period < s[j].Period }
 
 type BibleStudy struct {
-	ID      primitive.ObjectID `json:"id" bson:"_id"`
-	Title   string             `json:"title" bson:"title"`
-	Days    uint               `json:"days" bson:"days"`
-	Periods []BibleStudyPeriod `json:"periods" bson:"periods"`
+	ID      uint64             `json:"id,omitempty" gorm:"primaryKey;column:id;autoIncrement"`
+	Title   string             `json:"title" gorm:"column:title"`
+	Days    uint               `json:"days" gorm:"column:days"`
+	Periods []BibleStudyPeriod `json:"periods" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+}
+
+func (BibleStudy) TableName() string {
+	return "bible_studies"
 }
 
 // ByBibleStudyPeriod will contain the list of study periods defining the study
