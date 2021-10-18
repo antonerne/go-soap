@@ -9,6 +9,10 @@ type Token struct {
 	Expires time.Time `json:"-" gorm:"column:expires"`
 }
 
+func (Token) TableName() string {
+	return "user_tokens"
+}
+
 // ByContacts will provide the sort interface methods for sorting an employee's
 // contact information.
 type ByToken []Token

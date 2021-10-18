@@ -59,6 +59,7 @@ func main() {
 		&models.UserRemote{},
 		&models.Name{},
 		&models.Credentials{},
+		&models.Token{},
 	)
 
 	db.AutoMigrate(
