@@ -30,16 +30,6 @@ func (User) TableName() string {
 	return "users"
 }
 
-func (u *User) HasRemote(ipaddress string) bool {
-	answer := false
-	for _, rip := range u.Remotes {
-		if rip.RemoteIP == ipaddress {
-			answer = true
-		}
-	}
-	return answer
-}
-
 func (u *User) VerifyRemoteToken(token string, ipaddr string) (bool, *ErrorMessage) {
 	if u.Creds.NewRemoteToken == token {
 		return true, nil
@@ -52,9 +42,9 @@ func (u *User) VerifyRemoteToken(token string, ipaddr string) (bool, *ErrorMessa
 }
 
 type UserRemote struct {
-	ID       uint64 `json:"id" gorm:"primaryKey;column:id;autoIncrement"`
-	UserID   string `json:"-" gorm:"column:userid"`
-	RemoteIP string `json:"remote_ip" gorm:"column:remote_ip"`
+	ID                uint64 `json:"id" gorm:"primaryKey;column:id;autoIncrement"`
+	CredentialsUserID string `json:"-" gorm:"column:userid"`
+	RemoteIP          string `json:"remote_ip" gorm:"column:remote_ip"`
 }
 
 func (UserRemote) TableName() string {
