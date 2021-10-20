@@ -23,7 +23,6 @@ type User struct {
 	Editor  bool             `json:"editor,omitempty" gorm:"column:editor"`
 	Name    Name             `json:"name" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	Creds   Credentials      `json:"creds,omitempty" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	Remotes []UserRemote     `json:"remotes" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	Studies []UserBibleStudy `json:"studies" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
@@ -84,18 +83,19 @@ func (n *Name) FullName() string {
 }
 
 type Credentials struct {
-	UserID            string    `json:"-" gorm:"primaryKey;column:userid"`
-	Password          string    `json:"-" gorm:"column:password"`
-	Expires           time.Time `json:"expires" gorm:"column:expires"`
-	MustChange        bool      `json:"mustchange" gorm:"column:mustchange"`
-	Locked            bool      `json:"locked" gorm:"column:locked"`
-	BadAttempts       int16     `json:"-" gorm:"column:badattempts"`
-	Verified          time.Time `json:"-" gorm:"column:verified"`
-	VerificationToken string    `json:"-" gorm:"column:verificationtoken"`
-	ResetToken        string    `json:"-" gorm:"column:resettoken"`
-	ResetExpires      time.Time `json:"-" gorm:"column:resetexpires"`
-	NewRemoteToken    string    `json:"-" gorm:"column:newremotetoken"`
-	PrivateKey        string    `json:"-" gorm:"column:privatekey"`
+	UserID            string       `json:"-" gorm:"primaryKey;column:userid"`
+	Password          string       `json:"-" gorm:"column:password"`
+	Expires           time.Time    `json:"expires" gorm:"column:expires"`
+	MustChange        bool         `json:"mustchange" gorm:"column:mustchange"`
+	Locked            bool         `json:"locked" gorm:"column:locked"`
+	BadAttempts       int16        `json:"-" gorm:"column:badattempts"`
+	Verified          time.Time    `json:"-" gorm:"column:verified"`
+	VerificationToken string       `json:"-" gorm:"column:verificationtoken"`
+	ResetToken        string       `json:"-" gorm:"column:resettoken"`
+	ResetExpires      time.Time    `json:"-" gorm:"column:resetexpires"`
+	NewRemoteToken    string       `json:"-" gorm:"column:newremotetoken"`
+	Remotes           []UserRemote `json:"remotes" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	PrivateKey        string       `json:"-" gorm:"column:privatekey"`
 }
 
 func (Credentials) TableName() string {
@@ -167,14 +167,17 @@ func (c *Credentials) LogIn(passwd string, remote string) (bool, *ErrorMessage) 
 		c.Locked = true
 		return false, &errMsg
 	}
+	if !c.HasRemote(remote) {
+		errMsg := ErrorMessage{
+			ErrorType:  "new remote",
+			StatusCode: 205,
+			Message:    "New Remote",
+		}
+		return true, &errMsg
+	}
 	c.BadAttempts = 0
 	c.Locked = false
-	errMsg := ErrorMessage{
-		ErrorType:  "new remote",
-		StatusCode: 205,
-		Message:    "New Remote",
-	}
-	return true, &errMsg
+	return true, nil
 }
 
 // StartVerification function will start the Email Verification process, by
@@ -206,6 +209,16 @@ func (c *Credentials) Verify(token string) (bool, *ErrorMessage) {
 func (c *Credentials) StartRemoteToken() string {
 	c.NewRemoteToken = c.randomToken(7)
 	return c.NewRemoteToken
+}
+
+func (c *Credentials) HasRemote(ipaddress string) bool {
+	answer := false
+	for _, rip := range c.Remotes {
+		if rip.RemoteIP == ipaddress {
+			answer = true
+		}
+	}
+	return answer
 }
 
 // StartForgot function will be used to start the reset (forgot) password
