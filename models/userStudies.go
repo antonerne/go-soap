@@ -11,6 +11,7 @@ type UserBibleStudy struct {
 	UserID       string                 `json:"-" gorm:"column:userid"`
 	BibleStudyID uint64                 `json:"bible_study_id" gorm:"column:bible_study_id"`
 	StartDate    time.Time              `json:"startdate" gorm:"column:startdate"`
+	EndDate      time.Time              `json:"enddate" gorm:"column:enddate"`
 	Periods      []UserBibleStudyPeriod `json:"periods" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
