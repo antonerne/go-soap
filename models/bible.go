@@ -91,10 +91,11 @@ func (s ByBibleStudyPeriod) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s ByBibleStudyPeriod) Less(i, j int) bool { return s[i].Period < s[j].Period }
 
 type BibleStudy struct {
-	ID      uint64             `json:"id,omitempty" gorm:"primaryKey;column:id;autoIncrement"`
-	Title   string             `json:"title" gorm:"column:title"`
-	Days    uint               `json:"days" gorm:"column:days"`
-	Periods []BibleStudyPeriod `json:"periods" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+	ID               uint64             `json:"id,omitempty" gorm:"primaryKey;column:id;autoIncrement"`
+	Title            string             `json:"title" gorm:"column:title"`
+	Days             uint               `json:"days" gorm:"column:days"`
+	BeginImmediately bool               `json:"begin,omitempty" gorm:"column:begin"`
+	Periods          []BibleStudyPeriod `json:"periods" gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 func (BibleStudy) TableName() string {
